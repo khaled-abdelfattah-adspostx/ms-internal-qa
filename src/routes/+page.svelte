@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
+  import { base } from '$app/paths';
   import InputField from '$lib/components/InputField.svelte';
   import SelectField from '$lib/components/SelectField.svelte';
   import Button from '$lib/components/Button.svelte';
@@ -52,7 +53,7 @@
   <div class="flex items-center justify-between">
     <div class="flex items-center space-x-3 animate-fade-in">
       <!-- MomentScience logo -->
-      <img src="/ms-logo.svg" alt="MomentScience Logo" class="w-8 h-8 drop-shadow-md" />
+      <img src="{base}/ms-logo.svg" alt="MomentScience Logo" class="w-8 h-8 drop-shadow-md" />
       <div>
         <h1 class="text-lg font-bold ms-text-gradient">QA Tools</h1>
         <p class="text-xs text-brand-gray-600">MomentScience</p>
@@ -82,7 +83,7 @@
     <div class="hidden md:flex items-center justify-between p-6 border-b border-brand-gray-200 dark:border-gray-600 bg-gradient-to-r from-orange-50 to-red-50 dark:from-gray-700 dark:to-gray-800 animate-fade-in">
       <div class="flex items-center space-x-4">
         <!-- MomentScience logo -->
-        <img src="/ms-logo.svg" alt="MomentScience Logo" class="w-12 h-12 drop-shadow-lg" />
+        <img src="{base}/ms-logo.svg" alt="MomentScience Logo" class="w-12 h-12 drop-shadow-lg" />
         <div>
           <h1 class="text-xl font-bold ms-text-gradient">QA Tools</h1>
           <p class="text-sm text-brand-gray-600 dark:text-gray-300 font-medium">MomentScience Testing Suite</p>
@@ -120,7 +121,7 @@
     <div class="p-4 border-t border-brand-gray-200 dark:border-gray-600 bg-gradient-to-r from-orange-50 to-red-50 dark:from-gray-700 dark:to-gray-800">
       <div class="text-center animate-fade-in">
         <div class="flex items-center justify-center space-x-2 mb-2">
-          <img src="/ms-logo.svg" alt="MomentScience Logo" class="w-4 h-4" />
+          <img src="{base}/ms-logo.svg" alt="MomentScience Logo" class="w-4 h-4" />
           <span class="text-xs font-bold ms-text-gradient">MomentScience</span>
         </div>
         <p class="text-xs text-brand-gray-500 dark:text-gray-400">
@@ -256,7 +257,7 @@
           <div class="relative">
             <div class="animate-spin rounded-full h-16 w-16 border-4 border-orange-200"></div>
             <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-brand-primary absolute top-0 left-0"></div>
-            <img src="/ms-logo.svg" alt="Loading" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-6 h-6 animate-pulse-gentle" />
+            <img src="{base}/ms-logo.svg" alt="Loading" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-6 h-6 animate-pulse-gentle" />
           </div>
         </div>
       {/if}
