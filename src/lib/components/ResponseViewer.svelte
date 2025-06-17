@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import { 
@@ -20,22 +20,57 @@
 
   export let response: ApiResponse | null = null;
   export let previousResponse: ApiResponse | null = null;
-
+    // Variables
   let viewMode: 'formatted' | 'raw' = 'formatted';
   let isFullscreen = false;
   let searchQuery = '';
+  let debouncedSearchQuery = '';
+  let searchTimeout: number | undefined;
   let showDiff = false;
   let expandedPaths: Set<string> = new Set();
   let copySuccess = '';
-  // Performance timing breakdown
+  let searchInputElement: HTMLInputElement;
+  
+  // Reactive computations
   $: timing = response?.timing || null;
   $: hasError = response && (response.status >= 400 || response.error);
   $: isSuccess = response && response.status >= 200 && response.status < 300;
+  $: responseText = response ? (typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2)) : '';
+  $: formattedJson = response?.data ? renderJsonNode(response.data) : '';
+  $: filteredJson = debouncedSearchQuery ? highlightSearchTerm(formattedJson) : formattedJson;
 
+  // Debounced search with proper cleanup
+  function updateDebouncedSearch() {
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    searchTimeout = setTimeout(() => {
+      debouncedSearchQuery = searchQuery;
+    }, 300);
+  }
+  
+  // Watch searchQuery changes
+  $: if (searchQuery !== undefined) {
+    updateDebouncedSearch();
+  }
+    function clearSearch() {
+    searchQuery = '';
+    debouncedSearchQuery = '';
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+      searchTimeout = undefined;
+    }
+  }
   onMount(() => {
     // Auto-expand first level of JSON
     if (response?.data) {
       expandedPaths.add('root');
+    }
+  });
+  onDestroy(() => {
+    // Cleanup timeout to prevent memory leaks
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
     }
   });
 
@@ -92,11 +127,30 @@
     a.click();
     URL.revokeObjectURL(url);
   }
-
   function highlightSearchTerm(text: string): string {
-    if (!searchQuery.trim()) return text;
-    const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    return text.replace(regex, '<mark class="bg-yellow-200 px-1 rounded">$1</mark>');
+    if (!debouncedSearchQuery.trim()) return text;
+    
+    // Optimize regex creation and limit highlighting to prevent DOM overload
+    const query = debouncedSearchQuery.trim();
+    if (query.length < 2) return text; // Only search for 2+ characters
+    
+    try {
+      const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escapedQuery})`, 'gi');
+      
+      // Limit the number of highlights to prevent performance issues
+      let matchCount = 0;
+      const maxMatches = 100;
+      
+      return text.replace(regex, (match) => {
+        if (matchCount >= maxMatches) return match;
+        matchCount++;
+        return `<mark class="bg-yellow-200 dark:bg-yellow-600 px-1 rounded text-black dark:text-white">${match}</mark>`;
+      });
+    } catch (e) {
+      // If regex is invalid, return original text
+      return text;
+    }
   }
 
   function togglePath(path: string) {
@@ -144,13 +198,8 @@
       });
       result += `${indent}}`;
       return result;
-    }
-
-    return String(obj);
+    }    return String(obj);
   }
-
-  $: formattedJson = response?.data ? renderJsonNode(response.data) : '';
-  $: filteredJson = searchQuery ? highlightSearchTerm(formattedJson) : formattedJson;
 </script>
 
 <!-- Response Viewer Container -->
@@ -286,19 +335,27 @@
           </div>
         {/if}
       </div>
-    {/if}
-
-    <!-- Search Bar -->
+    {/if}    <!-- Search Bar -->
     <div class="mb-4">
       <div class="relative">
         <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-gray-400" />
         <input
           type="text"
-          placeholder="Search in response..."
+          placeholder="Search in response... (min 2 chars)"
           bind:value={searchQuery}
-          class="w-full pl-10 pr-4 py-2 border-2 border-brand-gray-200 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all duration-300"
+          class="w-full pl-10 pr-4 py-2 border-2 border-brand-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all duration-300 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
         />
+        {#if searchQuery.length > 0 && searchQuery !== debouncedSearchQuery}
+          <div class="absolute right-3 top-1/2 transform -translate-y-1/2">
+            <div class="w-3 h-3 border-2 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        {/if}
       </div>
+      {#if debouncedSearchQuery.length > 0}
+        <div class="mt-2 text-xs text-brand-gray-600 dark:text-gray-400">
+          Searching for: "{debouncedSearchQuery}"
+        </div>
+      {/if}
     </div>
   {:else}
     <div class="mb-4 p-4 bg-white rounded-xl border border-brand-gray-200 shadow-inner">
@@ -344,9 +401,9 @@
 
 <!-- Fullscreen Modal -->
 {#if isFullscreen && response}
-  <Modal bind:isOpen={isFullscreen} size="xl" title="Response Viewer - Fullscreen">
-    <div class="max-h-[80vh] overflow-auto">
-      <div class="mb-4">
+  <Modal bind:isOpen={isFullscreen} size="fullscreen" title="Response Viewer - Fullscreen">
+    <div class="h-full flex flex-col overflow-hidden">
+      <div class="mb-4 flex-shrink-0">
         <div class="relative">
           <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-gray-400" />
           <input
@@ -358,12 +415,12 @@
         </div>
       </div>
       
-      <div class="bg-gray-900 rounded-xl overflow-hidden">
-        <div class="response-area">
+      <div class="bg-gray-900 rounded-xl overflow-hidden flex-1 flex flex-col">
+        <div class="response-area flex-1 overflow-auto">
           {#if viewMode === 'formatted' && response.data}
-            <pre class="whitespace-pre-wrap font-mono text-sm leading-relaxed p-6 text-green-400">{@html filteredJson}</pre>
+            <pre class="whitespace-pre-wrap font-mono text-sm leading-relaxed p-6 text-green-400 h-full">{@html filteredJson}</pre>
           {:else}
-            <pre class="whitespace-pre-wrap font-mono text-sm leading-relaxed p-6 text-green-400">{response.data ? JSON.stringify(response.data, null, 2) : 'No response data'}</pre>
+            <pre class="whitespace-pre-wrap font-mono text-sm leading-relaxed p-6 text-green-400 h-full">{response.data ? JSON.stringify(response.data, null, 2) : 'No response data'}</pre>
           {/if}
         </div>
       </div>

@@ -46,6 +46,15 @@
   }
 }
 
+@keyframes bounce-gentle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
 @keyframes pulse {
   0%, 100% {
     transform: scale(1);
@@ -57,10 +66,10 @@
 
 @keyframes shimmer {
   0% {
-    background-position: -468px 0;
+    background-position: -200% 0;
   }
   100% {
-    background-position: 468px 0;
+    background-position: 200% 0;
   }
 }
 
@@ -100,6 +109,44 @@
   }
 }
 
+/* Performance optimizations */
+* {
+  box-sizing: border-box;
+}
+
+/* Optimize font rendering */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* GPU acceleration for animations */
+.animate-bounce-gentle,
+.animate-fade-in,
+.animate-slide-in,
+.animate-pulse,
+.animate-spin,
+.animate-shimmer {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Loading screen optimizations */
+.loading-screen {
+  contain: layout style paint;
+  isolation: isolate;
+}
+
 /* Custom component styles */
 @layer components {
   .animate-fade-in {
@@ -109,7 +156,8 @@
   .animate-slide-in {
     animation: slideIn 0.8s ease-out forwards;
   }
-    .animate-pulse-gentle {
+  
+  .animate-pulse-gentle {
     animation: pulse 2s ease-in-out infinite;
   }
   
@@ -125,8 +173,9 @@
     background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
     background-size: 200% 100%;
     animation: shimmer 2s infinite;
-  }  .input-label {
-    @apply block text-sm font-semibold text-brand-gray-700 dark:text-gray-200 mb-2 transition-colors duration-300;
+  }
+  .input-label {
+    @apply block text-sm font-semibold text-brand-gray-700 mb-2 transition-colors duration-300;
   }
     .input-field {
     @apply mt-1 block w-full px-4 py-3 bg-white border-2 border-brand-gray-200 rounded-xl shadow-sm placeholder-brand-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent sm:text-sm transition-all duration-300 hover:border-brand-gray-300 hover:shadow-md;
@@ -269,22 +318,6 @@
 .dark .input-field:focus {
   border-color: #FF4B1F;
   box-shadow: 0 0 0 3px rgba(255, 75, 31, 0.1);
-}
-
-/* Dark mode input placeholders */
-.dark .input-field::placeholder {
-  color: #94a3b8;
-}
-
-/* Dark mode select styling */
-.dark select.input-field {
-  background: rgba(30, 41, 59, 0.8);
-  color: #e2e8f0;
-}
-
-.dark select.input-field option {
-  background: #1e293b;
-  color: #e2e8f0;
 }
 
 .dark .btn-primary {
@@ -439,28 +472,7 @@
   -webkit-text-fill-color: transparent;
 }
 
-/* Dark mode error styling */
-.dark .input-field.error {
-  border-color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
-}
-
-.dark .bg-red-50 {
-  background: rgba(239, 68, 68, 0.1) !important;
-}
-
-.dark .border-red-200 {
-  border-color: rgba(239, 68, 68, 0.3) !important;
-}
-
-.dark .bg-red-100 {
-  background: rgba(239, 68, 68, 0.2) !important;
-}
-
-.dark .text-red-700 {
-  color: #fca5a5 !important;
-}
-
-.dark .text-red-600 {
-  color: #f87171 !important;
+/* Loading animation utilities */
+.animate-bounce-gentle {
+  animation: bounce-gentle 2s ease-in-out infinite;
 }

@@ -1,20 +1,23 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import { Trash2, Clock, ExternalLink, RefreshCw, Search } from 'lucide-svelte';
   import { getStorageData, clearHistory } from '$lib/storage';
   import type { RequestHistoryItem } from '$lib/types';
-
   let historyItems: RequestHistoryItem[] = [];
   let filteredItems: RequestHistoryItem[] = [];
   let searchQuery = '';
-  let selectedItem: RequestHistoryItem | null = null;
-  let showDetailsModal = false;
+  let searchTimeout: number;  let selectedItem: RequestHistoryItem | null = null;
+  let showDetailsView = false;  // Changed from showDetailsModal
   let showClearConfirmModal = false;
-
   onMount(() => {
     loadHistory();
+  });
+
+  onDestroy(() => {
+    // Cleanup timeout to prevent memory leaks
+    clearTimeout(searchTimeout);
   });
 
   function loadHistory() {
@@ -22,29 +25,42 @@
     historyItems = data.requestHistory;
     filterItems();
   }
-
   function filterItems() {
-    if (!searchQuery.trim()) {
+    const query = searchQuery.trim().toLowerCase();
+    
+    if (!query) {
       filteredItems = historyItems;
       return;
     }
 
-    const query = searchQuery.toLowerCase();
-    filteredItems = historyItems.filter(item => 
-      item.request.path.toLowerCase().includes(query) ||
-      item.url.toLowerCase().includes(query) ||
-      item.response.status.toString().includes(query) ||
-      item.config.environment.toLowerCase().includes(query)
-    );
+    // Only filter if search query is at least 2 characters for better performance
+    if (query.length < 2) {
+      filteredItems = historyItems;
+      return;
+    }
+
+    // Optimized filtering with early returns
+    filteredItems = historyItems.filter(item => {
+      // Check most common search fields first for better performance
+      return (
+        item.request.path.toLowerCase().includes(query) ||
+        item.url.toLowerCase().includes(query) ||
+        item.response.status.toString().includes(query) ||
+        item.config.environment.toLowerCase().includes(query)
+      );
+    });
   }
 
+  // Debounced search handler
   function handleSearch() {
-    filterItems();
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      filterItems();
+    }, 200); // 200ms debounce for better UX on slower searches
   }
-
   function showItemDetails(item: RequestHistoryItem) {
     selectedItem = item;
-    showDetailsModal = true;
+    showDetailsView = true;  // Changed from showDetailsModal
   }
 
   function handleClearHistory() {
@@ -99,7 +115,9 @@
 </script>
 
 <div class="space-y-8 animate-fade-in">
-  <!-- Header -->
+  {#if !showDetailsView}
+    <!-- History List View -->
+    <!-- Header -->
   <div class="section-card card-hover bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-100">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div class="flex items-center space-x-4">
@@ -124,19 +142,28 @@
       </div>
     </div>
   </div>
-
   <!-- Search -->
   <div class="section-card">
-    <div class="flex items-center gap-2">
-      <Search class="w-5 h-5 text-gray-400" />
+    <div class="flex items-center gap-2 relative">
+      <Search class="w-5 h-5 text-gray-400 dark:text-gray-500" />
       <input
         type="text"
         bind:value={searchQuery}
         on:input={handleSearch}
-        placeholder="Search by path, URL, status, or environment..."
-        class="flex-1 input-field mt-0"
+        placeholder="Search by path, URL, status, or environment... (min 2 chars)"
+        class="flex-1 input-field mt-0 pr-8"
       />
+      {#if searchQuery.length > 0 && searchQuery.length < 2}
+        <div class="absolute right-3 text-xs text-brand-gray-500 dark:text-gray-400">
+          Type more...
+        </div>
+      {/if}
     </div>
+    {#if searchQuery.length >= 2}
+      <div class="mt-2 text-xs text-brand-gray-600 dark:text-gray-400">
+        Found {filteredItems.length} of {historyItems.length} requests
+      </div>
+    {/if}
   </div>
 
   <!-- History Items -->
@@ -213,93 +240,116 @@
             (limited to latest 100)
           {/if}
         </p>
-      </div>
-    {/if}
+      </div>    {/if}
   </div>
-</div>
+  {:else}
+    <!-- Full-Page Detail View -->
+    <div class="section-card">
+      <!-- Back Header -->
+      <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="flex items-center space-x-4">
+          <Button 
+            variant="secondary" 
+            size="sm" 
+            on:click={() => { showDetailsView = false; selectedItem = null; }}
+          >
+            ← Back to History
+          </Button>
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Request Details</h2>
+        </div>
+      </div>
 
-<!-- Details Modal -->
-<Modal bind:isOpen={showDetailsModal} title="Request Details" size="lg">
-  {#if selectedItem}
-    <div class="space-y-6">
-      <!-- Request Info -->
-      <div>
-        <h4 class="font-semibold text-gray-900 mb-3">Request Information</h4>
-        <div class="bg-gray-50 rounded-lg p-4">
-          <div class="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span class="font-medium text-gray-700">Method:</span>
-              <span class="ml-2">{selectedItem.request.method}</span>
-            </div>
-            <div>
-              <span class="font-medium text-gray-700">Status:</span>
-              <span class="ml-2">{selectedItem.response.status} {selectedItem.response.statusText}</span>
-            </div>
-            <div>
-              <span class="font-medium text-gray-700">Environment:</span>
-              <span class="ml-2">{selectedItem.config.environment}</span>
-            </div>
-            <div>
-              <span class="font-medium text-gray-700">Timestamp:</span>
-              <span class="ml-2">{formatTimestamp(selectedItem.timestamp)}</span>
+      {#if selectedItem}
+        <div class="space-y-8">
+          <!-- Request Info -->
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Request Information</h3>
+            <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                <div>
+                  <span class="font-medium text-gray-700 dark:text-gray-300">Method:</span>
+                  <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {getMethodClass(selectedItem.request.method)}">
+                    {selectedItem.request.method}
+                  </span>
+                </div>
+                <div>
+                  <span class="font-medium text-gray-700 dark:text-gray-300">Status:</span>
+                  <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {getStatusClass(selectedItem.response.status)}">
+                    {selectedItem.response.status} {selectedItem.response.statusText}
+                  </span>
+                </div>
+                <div>
+                  <span class="font-medium text-gray-700 dark:text-gray-300">Environment:</span>
+                  <span class="ml-2 capitalize">{selectedItem.config.environment}</span>
+                </div>
+                <div>
+                  <span class="font-medium text-gray-700 dark:text-gray-300">Timestamp:</span>
+                  <span class="ml-2">{formatTimestamp(selectedItem.timestamp)}</span>
+                </div>
+              </div>
+              
+              <div class="mt-6">
+                <span class="font-medium text-gray-700 dark:text-gray-300">Full URL:</span>
+                <div class="mt-2 p-3 bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-600">
+                  <code class="text-sm break-all text-gray-800 dark:text-gray-200">{selectedItem.url}</code>
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    on:click={() => selectedItem && copyToClipboard(selectedItem.url)}
+                    class="mt-2"
+                  >
+                    Copy URL
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
-          
-          <div class="mt-4">
-            <span class="font-medium text-gray-700">Full URL:</span>
-            <div class="mt-1 p-2 bg-white rounded border">
-              <code class="text-xs break-all">{selectedItem.url}</code>
+
+          <!-- Request Body -->
+          {#if selectedItem.request.body}
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Request Body</h3>
+              <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+                <pre class="text-sm bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-600 p-4 overflow-auto max-h-96 text-gray-800 dark:text-gray-200">{selectedItem.request.body}</pre>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  on:click={() => selectedItem?.request?.body && copyToClipboard(selectedItem.request.body)}
+                  class="mt-3"
+                >
+                  Copy Body
+                </Button>
+              </div>
+            </div>
+          {/if}
+
+          <!-- Response -->
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Response</h3>
+            <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+              <pre class="text-sm bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-600 p-4 overflow-auto max-h-96 text-gray-800 dark:text-gray-200">{typeof selectedItem.response.data === 'string' ? selectedItem.response.data : JSON.stringify(selectedItem.response.data, null, 2)}</pre>
               <Button 
                 variant="secondary" 
                 size="sm" 
-                on:click={() => copyToClipboard(selectedItem.url)}
-                class="ml-2"
+                on:click={() => {
+                  if (selectedItem?.response?.data) {
+                    const data = typeof selectedItem.response.data === 'string' 
+                      ? selectedItem.response.data 
+                      : JSON.stringify(selectedItem.response.data, null, 2);
+                    copyToClipboard(data);
+                  }
+                }}
+                class="mt-3"
               >
-                Copy
+                Copy Response
               </Button>
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- Request Body -->
-      {#if selectedItem.request.body}
-        <div>
-          <h4 class="font-semibold text-gray-900 mb-3">Request Body</h4>
-          <div class="bg-gray-50 rounded-lg p-4">
-            <pre class="text-xs bg-white rounded border p-3 overflow-auto max-h-40">{selectedItem.request.body}</pre>
-            <Button 
-              variant="secondary" 
-              size="sm" 
-              on:click={() => copyToClipboard(selectedItem.request.body)}
-              class="mt-2"
-            >
-              Copy Body
-            </Button>
-          </div>
-        </div>
       {/if}
-
-      <!-- Response -->
-      <div>
-        <h4 class="font-semibold text-gray-900 mb-3">Response</h4>
-        <div class="bg-gray-50 rounded-lg p-4">
-          <pre class="text-xs bg-white rounded border p-3 overflow-auto max-h-60">
-{typeof selectedItem.response.data === 'string' ? selectedItem.response.data : JSON.stringify(selectedItem.response.data, null, 2)}
-          </pre>
-          <Button 
-            variant="secondary" 
-            size="sm" 
-            on:click={() => copyToClipboard(typeof selectedItem.response.data === 'string' ? selectedItem.response.data : JSON.stringify(selectedItem.response.data, null, 2))}
-            class="mt-2"
-          >
-            Copy Response
-          </Button>
-        </div>
-      </div>
     </div>
   {/if}
-</Modal>
+</div>
 
 <!-- Clear Confirmation Modal -->
 <Modal bind:isOpen={showClearConfirmModal} title="Clear All History" size="sm">

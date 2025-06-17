@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';  import InputField from './InputField.svelte';
+  import { onMount } from 'svelte';
+  import { loadingManager } from '$lib/stores/loading';
+  import InputField from './InputField.svelte';
   import SelectField from './SelectField.svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
@@ -28,9 +30,8 @@
     body: '',
     sessionId: '',
     campaignId: ''
-  };
-  // UI state
-  let selectedPreset = 'Moments API';
+  };  // UI state
+  let selectedPreset = '';
   let isCustomEndpoint = false;
   let customEndpointPath = '';
   let jsonError = '';
@@ -173,6 +174,9 @@
     }    isLoading = true;
     response = null;
 
+    // Initialize loading manager for API request
+    loadingManager.start('Sending API Request...', 'Preparing request...');
+
     const startTime = performance.now();
     let timingData = {
       dns: 0,
@@ -184,6 +188,7 @@
 
     try {
       // Build the URL
+      loadingManager.setStage('Building Request URL...', 'Processing parameters...');
       let processedPath = replacePlaceholders(request.path, request.sessionId, request.campaignId);
       let fullUrl = buildFullUrl(currentBaseUrl, processedPath);
 
@@ -194,6 +199,7 @@
       }
 
       // Prepare headers
+      loadingManager.updateProgress(25, 'Setting up headers...');
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
       };
@@ -204,9 +210,8 @@
 
       if (config.apiKey) {
         headers['Authorization'] = `Bearer ${config.apiKey}`;
-      }
-
-      // Prepare fetch options
+      }      // Prepare fetch options
+      loadingManager.updateProgress(50, 'Configuring request options...');
       const fetchOptions: RequestInit = {
         method: request.method,
         headers
@@ -215,14 +220,19 @@
       // Add body for POST/PUT/PATCH requests
       if (showJsonBody) {
         fetchOptions.body = request.body || '{}';
-      }      // Make the request with timing
+      }
+
+      // Make the request with timing
+      loadingManager.setStage('Sending Request...', 'Connecting to server...');
       const preRequestTime = performance.now();
       const fetchResponse = await fetch(fullUrl, fetchOptions);
       
+      loadingManager.updateProgress(75, 'Receiving response...');
       const responseStartTime = performance.now();
       timingData.ttfb = Math.round(responseStartTime - preRequestTime);
 
       // Parse response
+      loadingManager.setStage('Processing Response...', 'Parsing data...');
       let responseData: unknown;
       try {
         responseData = await fetchResponse.json();
@@ -235,6 +245,7 @@
       timingData.total = Math.round(endTime - startTime);
 
       // Create response object
+      loadingManager.updateProgress(90, 'Finalizing response...');
       response = {
         status: fetchResponse.status,
         statusText: fetchResponse.statusText,
@@ -245,12 +256,17 @@
       };
 
       // Save to history
+      loadingManager.updateProgress(100, 'Saving to history...');
       addToHistory({
         config: { ...config },
         request: { ...request },
         response,
         url: fullUrl
-      });    } catch (error) {
+      });
+
+      // Success completion
+      loadingManager.finish();
+    } catch (error) {
       console.error('Request failed:', error);
       const endTime = performance.now();
       timingData.total = Math.round(endTime - startTime);
@@ -263,9 +279,12 @@
         error: error instanceof Error ? error.message : 'Unknown error',
         timing: timingData
       };
+
+      // Error completion
+      loadingManager.finish();
     } finally {
       isLoading = false;
-    }  }
+    }}
 
   function copyResponseToClipboard() {
     if (!response) return;
@@ -419,12 +438,12 @@
     
     <div class="space-y-4">      <!-- API Endpoint Selection -->
       <div class="flex items-end gap-2">
-        <div class="flex-1">
-          <SelectField
+        <div class="flex-1">          <SelectField
             id="api-preset"
             label="API Endpoint"
             bind:value={selectedPreset}
             options={presetOptions}
+            placeholder="Select an API endpoint..."
             tooltip="Select a predefined API endpoint configuration"
             on:change={handlePresetChange}
           />

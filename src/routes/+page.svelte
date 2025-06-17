@@ -6,10 +6,12 @@
   import SelectField from '$lib/components/SelectField.svelte';
   import Button from '$lib/components/Button.svelte';
   import Modal from '$lib/components/Modal.svelte';
-  import ApiRequestBuilder from '$lib/components/ApiRequestBuilder.svelte';
-  import RequestHistory from '$lib/components/RequestHistory.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
   import { Menu, Settings, History, PlayCircle, HelpCircle } from 'lucide-svelte';
+  
+  // Lazy load heavy components for better performance
+  let ApiRequestBuilder: any;
+  let RequestHistory: any;
   
   // Store for active tab
   const activeTab = writable('api-builder');
@@ -17,6 +19,32 @@
   // Reactive variables
   let sidebarOpen = false;
   let mounted = false;
+  let componentsLoaded = false;
+  
+  // Dynamic import functions for better performance
+  async function loadApiRequestBuilder() {
+    if (!ApiRequestBuilder) {
+      try {
+        const module = await import('$lib/components/ApiRequestBuilder.svelte');
+        ApiRequestBuilder = module.default;
+      } catch (error) {
+        console.error('Failed to load API Builder:', error);
+      }
+    }
+    return ApiRequestBuilder;
+  }
+  
+  async function loadRequestHistory() {
+    if (!RequestHistory) {
+      try {
+        const module = await import('$lib/components/RequestHistory.svelte');
+        RequestHistory = module.default;
+      } catch (error) {
+        console.error('Failed to load Request History:', error);
+      }
+    }
+    return RequestHistory;
+  }
   
   // Tab configuration
   const tabs = [
@@ -27,11 +55,30 @@
   ];
   
   onMount(() => {
+    console.log('📄 Main page mounted');
     mounted = true;
+    
+    // Preload components after initial render with staggered loading
+    setTimeout(async () => {
+      try {
+        console.log('📦 Loading components...');
+        // Load components in parallel for better performance
+        await Promise.allSettled([
+          loadApiRequestBuilder(),
+          loadRequestHistory()
+        ]);
+        componentsLoaded = true;
+        console.log('✅ Components loaded successfully');
+      } catch (error) {
+        console.error('❌ Component loading failed:', error);
+        componentsLoaded = true; // Still mark as loaded to show UI
+      }
+    }, 50); // Reduced delay for faster perceived performance
   });
   
   function setActiveTab(tabId: string) {
     activeTab.set(tabId);
+    
     // Close sidebar on mobile when tab is selected
     if (window.innerWidth < 768) {
       sidebarOpen = false;
@@ -150,9 +197,23 @@
       {#if mounted}
         <div class="animate-fade-in">
           {#if $activeTab === 'api-builder'}
-            <ApiRequestBuilder />
+            {#if componentsLoaded && ApiRequestBuilder}
+              <svelte:component this={ApiRequestBuilder} />
+            {:else}
+              <div class="section-card text-center py-12">
+                <div class="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p class="text-brand-gray-600 dark:text-gray-400">Loading API Request Builder...</p>
+              </div>
+            {/if}
           {:else if $activeTab === 'history'}
-            <RequestHistory />
+            {#if componentsLoaded && RequestHistory}
+              <svelte:component this={RequestHistory} />
+            {:else}
+              <div class="section-card text-center py-12">
+                <div class="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p class="text-brand-gray-600 dark:text-gray-400">Loading Request History...</p>
+              </div>
+            {/if}
           {:else if $activeTab === 'help'}
             <div class="section-card card-hover animate-slide-in bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border-2 border-blue-200 dark:border-blue-700">
               <div class="flex items-center space-x-3 mb-6">

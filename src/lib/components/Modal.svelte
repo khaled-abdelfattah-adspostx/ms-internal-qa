@@ -2,8 +2,7 @@
   import { createEventDispatcher } from 'svelte';
 
   export let isOpen = false;
-  export let title = '';
-  export let size: 'sm' | 'md' | 'lg' | 'xl' = 'md';
+  export let title = '';  export let size: 'sm' | 'md' | 'lg' | 'xl' | 'fullscreen' = 'md';
   export let closable = true;
 
   const dispatch = createEventDispatcher<{
@@ -14,7 +13,8 @@
     sm: 'max-w-sm',
     md: 'max-w-md',
     lg: 'max-w-2xl',
-    xl: 'max-w-4xl'
+    xl: 'max-w-4xl',
+    fullscreen: 'max-w-[95vw] h-[95vh]'
   };
 
   function closeModal() {
@@ -53,9 +53,8 @@
     aria-modal="true"
     aria-labelledby={title ? 'modal-title' : undefined}
     tabindex="-1"
-  >
-    <!-- Modal content -->
-    <div class="modal-content {sizeClasses[size]} animate-slide-in shadow-2xl border-2 border-brand-gray-100">
+  >    <!-- Modal content -->
+    <div class="modal-content {sizeClasses[size]} {size === 'fullscreen' ? 'overflow-hidden flex flex-col' : ''} animate-slide-in shadow-2xl border-2 border-brand-gray-100">
       {#if title || closable}
         <div class="flex items-center justify-between mb-6 p-6 bg-gradient-to-r from-orange-50 to-red-50 -m-8 mb-6 rounded-t-2xl border-b border-brand-gray-200">
           {#if title}
@@ -85,9 +84,8 @@
           {/if}
         </div>
       {/if}
-      
-      <!-- Modal body -->
-      <div class="modal-body">
+        <!-- Modal body -->
+      <div class="modal-body {size === 'fullscreen' ? 'flex-1 overflow-hidden' : ''}">
         <slot />
       </div>
     </div>
